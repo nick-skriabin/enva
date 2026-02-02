@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"enva/internal/shell"
+	"github.com/nick-skriabin/enva/internal/shell"
 )
 
 // Init initializes the model.

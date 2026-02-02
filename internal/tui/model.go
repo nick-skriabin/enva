@@ -6,9 +6,9 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 
-	"enva/internal/db"
-	"enva/internal/env"
-	"enva/internal/search"
+	"github.com/nick-skriabin/enva/internal/db"
+	"github.com/nick-skriabin/enva/internal/env"
+	"github.com/nick-skriabin/enva/internal/search"
 )
 
 // ViewMode represents the current list view mode.

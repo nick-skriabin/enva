@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"enva/internal/env"
-	"enva/internal/search"
+	"github.com/nick-skriabin/enva/internal/env"
+	"github.com/nick-skriabin/enva/internal/search"
 )
 
 // ensure import is used

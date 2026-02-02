@@ -1,4 +1,4 @@
-module enva
+module github.com/nick-skriabin/enva
 
 go 1.23.6
 

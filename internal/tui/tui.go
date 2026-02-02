@@ -5,8 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"enva/internal/db"
-	"enva/internal/env"
+	"github.com/nick-skriabin/enva/internal/db"
+	"github.com/nick-skriabin/enva/internal/env"
 )
 
 // Run starts the TUI application.

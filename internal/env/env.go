@@ -5,8 +5,8 @@ import (
 	"os"
 	"sort"
 
-	"enva/internal/db"
-	envpath "enva/internal/path"
+	"github.com/nick-skriabin/enva/internal/db"
+	envpath "github.com/nick-skriabin/enva/internal/path"
 )
 
 // DefaultProfile is the default profile name.

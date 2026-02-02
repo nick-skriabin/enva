@@ -6,13 +6,24 @@ enva stores environment variables in a SQLite database and automatically loads/u
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
 ```bash
-go install ./cmd/enva
+brew tap nick-skriabin/tap
+brew install enva
 ```
 
-Or build from source:
+### Go Install
 
 ```bash
+go install github.com/nick-skriabin/enva/cmd/enva@latest
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/nick-skriabin/enva.git
+cd enva
 go build -o enva ./cmd/enva
 mv enva /usr/local/bin/
 ```

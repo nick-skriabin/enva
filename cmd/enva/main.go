@@ -53,11 +53,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"enva/internal/db"
-	"enva/internal/env"
-	envpath "enva/internal/path"
-	"enva/internal/shell"
-	"enva/internal/tui"
+	"github.com/nick-skriabin/enva/internal/db"
+	"github.com/nick-skriabin/enva/internal/env"
+	envpath "github.com/nick-skriabin/enva/internal/path"
+	"github.com/nick-skriabin/enva/internal/shell"
+	"github.com/nick-skriabin/enva/internal/tui"
 )
 
 func main() {

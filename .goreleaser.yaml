@@ -1,0 +1,26 @@
+builds:
+  - main: ./cmd/enva
+    binary: enva
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+brews:
+  - repository:
+      owner: nick-skriabin
+      name: homebrew-tap
+    homepage: "https://github.com/nick-skriabin/enva"
+    description: "Per-directory environment variable manager with automatic shell integration"
+    license: "MIT"
+    install: |
+      bin.install "enva"
+    caveats: |
+      To activate enva, add to your shell config:
+
+      For zsh (~/.zshrc):
+        eval "$(enva hook zsh)"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"enva/internal/env"
+	"github.com/nick-skriabin/enva/internal/env"
 )
 
 // FormatExport formats a single variable as a POSIX-sh export line.

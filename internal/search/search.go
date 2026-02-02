@@ -7,7 +7,7 @@ import (
 
 	"github.com/sahilm/fuzzy"
 
-	"enva/internal/env"
+	"github.com/nick-skriabin/enva/internal/env"
 )
 
 // SearchResult represents a search result with match information.
