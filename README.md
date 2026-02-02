@@ -1,20 +1,20 @@
-# enva
+# enva 🌿
 
 ![enva](screenshots/enva.jpg)
 
 **Stop juggling `.env` files. Start managing environment variables like a pro.**
 
-enva is a per-directory environment variable manager that stores your vars in SQLite and automatically loads them as you navigate your filesystem. Set variables once, inherit them everywhere, override when needed.
+enva is a tiny CLI that stores your env vars in SQLite and loads them automatically as you `cd` around. Set once, inherit everywhere, override when needed. Simple as that.
 
-## Why enva?
+## ✨ Features
 
-- **Automatic loading** — Variables load/unload as you `cd` between directories
-- **Directory inheritance** — Set project-wide defaults, override in subdirectories
-- **Beautiful TUI** — Fuzzy search, bulk import, visual editing
-- **Profile support** — Switch between dev/staging/production configs
-- **No more `.env` files** — Centralized storage, no secrets in git
+- 🔄 **Auto-loading** — Vars load/unload as you navigate directories
+- 📂 **Inheritance** — Set project-wide defaults, override in subdirectories
+- 🎨 **Pretty TUI** — Fuzzy search, bulk import, visual editing
+- 🎭 **Profiles** — Switch between dev/staging/prod configs
+- 🔒 **No `.env` files** — One database, nothing to commit by accident
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Install
 
@@ -27,67 +27,68 @@ brew install enva
 go install github.com/nick-skriabin/enva/cmd/enva@latest
 ```
 
-### Set up your shell
+### Hook into your shell
 
-Add to your shell config and restart:
+Add one line to your shell config:
 
 ```bash
-# Zsh (~/.zshrc)
+# Zsh → ~/.zshrc
 eval "$(enva hook zsh)"
 
-# Bash (~/.bashrc)
+# Bash → ~/.bashrc
 eval "$(enva hook bash)"
 
-# Fish (~/.config/fish/config.fish)
+# Fish → ~/.config/fish/config.fish
 enva hook fish | source
 ```
 
-### Start using it
+Restart your terminal and you're good to go! 🎉
+
+### Try it out
 
 ```bash
 cd ~/projects/myapp
 
-# Set some variables
 enva set DATABASE_URL=postgres://localhost/mydb
 enva set API_KEY=sk-123456
 
-# That's it! Variables auto-load when you enter this directory
+# Done! These vars now auto-load whenever you enter this directory ✨
 ```
 
-## The TUI
+## 🖥️ The TUI
 
-Just run `enva` to launch the interactive interface:
+Just run `enva` to get the interactive interface:
 
 ```bash
 enva
 ```
 
-| Key | Action |
-|-----|--------|
-| `j/k` or `↑/↓` | Navigate |
+| Key | What it does |
+|-----|--------------|
+| `j/k` or `↑/↓` | Move around |
 | `/` | Fuzzy search |
 | `a` | Add variable |
 | `e` | Edit selected |
 | `x` | Delete |
-| `A` | Bulk import from clipboard/file |
+| `A` | Bulk import |
 | `t` | Toggle all/local view |
 | `?` | Help |
 | `q` | Quit |
 
-## CLI Commands
+## 🛠️ CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `enva` | Launch interactive TUI |
-| `enva set KEY=VALUE` | Set variable in current directory |
-| `enva unset KEY` | Remove variable |
-| `enva ls` | List effective variables |
-| `enva edit` | Edit in `$EDITOR` |
-| `enva run -- cmd` | Run command with env loaded |
+| Command | What it does |
+|---------|--------------|
+| `enva` | Open the TUI |
+| `enva set KEY=VALUE` | Set a variable |
+| `enva unset KEY` | Remove a variable |
+| `enva ls` | List all effective vars |
+| `enva edit` | Edit in your `$EDITOR` |
+| `enva run -- cmd` | Run command with vars loaded |
 | `enva export` | Print export statements |
-| `enva hook <shell>` | Print shell integration code |
+| `enva hook <shell>` | Get shell integration code |
 
-## How Inheritance Works
+## 🌳 How Inheritance Works
 
 Variables cascade down from parent directories:
 
@@ -97,55 +98,55 @@ Variables cascade down from parent directories:
     └── backend/                DEBUG=true
 ```
 
-When you `cd ~/projects/myapp/backend`, you get all three variables merged together. Child directories can override parent values.
+`cd` into `backend/` and you get all three. Child dirs can override parent values.
 
 ### Project Boundaries
 
-enva looks for project roots in this order:
+enva figures out your project root by looking for:
 
-1. `.enva` marker file
+1. `.enva` file (if you want to be explicit)
 2. `.git` directory
-3. Filesystem root
+3. Falls back to filesystem root
 
-Variables only inherit within the same project boundary.
+Vars only inherit within the same project.
 
-## Profiles
+## 🎭 Profiles
 
-Manage multiple environments with profiles:
+Got multiple environments? Profiles got you:
 
 ```bash
-# Production config
+# Set up production
 ENVA_PROFILE=production enva set API_URL=https://api.example.com
 
-# Development (default profile)
+# Development is the default
 enva set API_URL=http://localhost:3000
 
-# Switch profiles
+# Switch anytime
 export ENVA_PROFILE=production
-enva ls  # Shows production vars
+enva ls  # → shows production vars
 ```
 
-## Variable Descriptions
+## 💬 Variable Descriptions
 
-Add descriptions to document your variables:
+You can add descriptions to document what each var is for:
 
 ```bash
-# In the TUI, each variable has an optional description field
-# In exports, descriptions appear as comments:
+# In the TUI there's a description field for each var
+# When exported, descriptions become comments:
 export API_KEY='sk-123' # Main API key for auth service
 ```
 
-## Storage
+## 📦 Storage
 
-All variables live in a single SQLite database:
+Everything lives in one SQLite database:
 
 ```
 ~/.local/share/enva/enva.db
 ```
 
-No more scattered `.env` files. One source of truth.
+No scattered `.env` files. No secrets accidentally committed. Just one tidy database.
 
-## Build from Source
+## 🔧 Build from Source
 
 ```bash
 git clone https://github.com/nick-skriabin/enva.git
@@ -154,6 +155,6 @@ go build -o enva ./cmd/enva
 sudo mv enva /usr/local/bin/
 ```
 
-## License
+## 📄 License
 
-MIT
+MIT — do whatever you want with it!
