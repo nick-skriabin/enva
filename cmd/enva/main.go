@@ -173,38 +173,70 @@ when they're no longer needed.`,
 		// Get current vars
 		newVars := ctx.GetSortedVars()
 		newKeys := make(map[string]bool)
+		newVals := make(map[string]string)
 		for _, v := range newVars {
 			newKeys[v.Key] = true
+			newVals[v.Key] = v.Value
 		}
 
-		// Get previously loaded keys from env
+		// Get previously loaded keys and path from env
 		prevKeysStr := os.Getenv("__ENVA_LOADED_KEYS")
+		prevPath := os.Getenv("__ENVA_LOADED_PATH")
 		var prevKeys []string
+		prevKeysSet := make(map[string]bool)
 		if prevKeysStr != "" {
 			prevKeys = strings.Split(prevKeysStr, ":")
+			for _, k := range prevKeys {
+				if k != "" {
+					prevKeysSet[k] = true
+				}
+			}
 		}
+
+		// Count changes
+		var unsetCount, loadCount int
 
 		// Unset keys that are no longer in the environment
 		for _, key := range prevKeys {
 			if key != "" && !newKeys[key] {
 				fmt.Printf("unset %s\n", key)
+				unsetCount++
 			}
 		}
 
 		// Export new values
 		for _, v := range newVars {
 			fmt.Println(shell.FormatExport(v.Key, v.Value))
+			if !prevKeysSet[v.Key] {
+				loadCount++
+			}
 		}
 
-		// Update the tracking variable
+		// Update the tracking variables
 		var keysList []string
 		for _, v := range newVars {
 			keysList = append(keysList, v.Key)
 		}
+
+		// Track current path
+		cwdReal := ctx.CwdReal
 		if len(keysList) > 0 {
 			fmt.Printf("export __ENVA_LOADED_KEYS='%s'\n", strings.Join(keysList, ":"))
+			fmt.Printf("export __ENVA_LOADED_PATH='%s'\n", cwdReal)
 		} else if prevKeysStr != "" {
 			fmt.Println("unset __ENVA_LOADED_KEYS")
+			fmt.Println("unset __ENVA_LOADED_PATH")
+		}
+
+		// Print status message to stderr
+		if unsetCount > 0 && len(newVars) == 0 {
+			fmt.Fprintf(os.Stderr, "enva: unloaded %d var(s)\n", unsetCount)
+		} else if loadCount > 0 && prevPath != cwdReal {
+			fmt.Fprintf(os.Stderr, "enva: loaded %d var(s)\n", len(newVars))
+		} else if unsetCount > 0 || loadCount > 0 {
+			if prevPath != cwdReal {
+				fmt.Fprintf(os.Stderr, "enva: loaded %d var(s)\n", len(newVars))
+			}
 		}
 
 		return nil
