@@ -76,55 +76,41 @@ func (m Model) renderTopBar() string {
 }
 
 func (m Model) renderMainContent() string {
-	// Calculate available height for table (total - top bar - help bar - border)
+	// Calculate available height for table (total - top bar - help bar - horizontal lines)
 	contentHeight := m.height - 4
 	if contentHeight < 3 {
 		contentHeight = 3
 	}
 
-	// Build table content
-	tableContent := m.renderTableContent(contentHeight)
-
-	// Title for border
+	// Title line
 	viewMode := "Effective"
 	if m.viewMode == ViewLocal {
 		viewMode = "Local"
 	}
-	title := fmt.Sprintf(" %s Variables (%d/%d) ", viewMode, m.cursor+1, len(m.results))
+	title := fmt.Sprintf("%s Variables (%d/%d)", viewMode, m.cursor+1, len(m.results))
 
-	// Create bordered box
-	border := lipgloss.RoundedBorder()
-	boxStyle := lipgloss.NewStyle().
-		Border(border).
-		BorderForeground(colorBrBlack).
-		Width(m.width - 2)
+	var b strings.Builder
 
-	content := boxStyle.Render(tableContent)
-
-	// Inject title into top border
-	if len(content) > 0 {
-		lines := strings.Split(content, "\n")
-		if len(lines) > 0 {
-			// Find position to insert title (after the corner)
-			firstLine := lines[0]
-			titleStyled := styleBorderTitle.Render(title)
-			// Replace part of the border with title
-			if len(firstLine) > 4 {
-				runeFirst := []rune(firstLine)
-				runeTitle := []rune(titleStyled)
-				insertPos := 2
-				for i, r := range runeTitle {
-					if insertPos+i < len(runeFirst) {
-						runeFirst[insertPos+i] = r
-					}
-				}
-				lines[0] = string(runeFirst)
-			}
-			content = strings.Join(lines, "\n")
-		}
+	// Top horizontal line with title
+	titleStyled := styleBorderTitle.Render(title)
+	lineWidth := m.width - lipgloss.Width(titleStyled) - 3
+	if lineWidth < 0 {
+		lineWidth = 0
 	}
+	b.WriteString(styleDim.Render("─ "))
+	b.WriteString(titleStyled)
+	b.WriteString(styleDim.Render(" " + strings.Repeat("─", lineWidth)))
+	b.WriteString("\n")
 
-	return content + "\n"
+	// Table content
+	b.WriteString(m.renderTableContent(contentHeight))
+
+	// Bottom horizontal line
+	b.WriteString("\n")
+	b.WriteString(styleDim.Render(strings.Repeat("─", m.width)))
+	b.WriteString("\n")
+
+	return b.String()
 }
 
 func (m Model) renderTableContent(height int) string {
@@ -132,9 +118,9 @@ func (m Model) renderTableContent(height int) string {
 	innerWidth := m.width - 4
 	keyColWidth := 28
 	sourceColWidth := 10
-	// Row format: " key │ value │ source"
-	// Widths: 1 + key + 3 + value + 3 + source
-	valueColWidth := innerWidth - keyColWidth - sourceColWidth - 7
+	// Row format: " key  value  source"
+	// Widths: 1 + key + 2 + value + 2 + source
+	valueColWidth := innerWidth - keyColWidth - sourceColWidth - 5
 	if valueColWidth < 20 {
 		valueColWidth = 20
 	}
@@ -142,14 +128,14 @@ func (m Model) renderTableContent(height int) string {
 	var lines []string
 
 	// Header
-	header := fmt.Sprintf(" %-*s │ %-*s │ %-*s",
+	header := fmt.Sprintf(" %-*s  %-*s  %-*s",
 		keyColWidth, "Key",
 		valueColWidth, "Value",
 		sourceColWidth, "Source")
 	lines = append(lines, styleTableHeader.Render(header))
 
-	// Separator - simple dashes matching the header length visually
-	sepLine := strings.Repeat("─", lipgloss.Width(header))
+	// Separator - horizontal line
+	sepLine := strings.Repeat("─", innerWidth)
 	lines = append(lines, styleDim.Render(sepLine))
 
 	// Data rows
@@ -179,7 +165,7 @@ func (m Model) renderTableContent(height int) string {
 
 		if isSelected {
 			// Build plain row and apply selection style
-			row := fmt.Sprintf(" %s │ %s │ %s", keyStr, valueStr, sourceStr)
+			row := fmt.Sprintf(" %s  %s  %s", keyStr, valueStr, sourceStr)
 			row = padToWidth(row, innerWidth)
 			lines = append(lines, styleTableRowSelected.Render(row))
 		} else {
@@ -192,7 +178,7 @@ func (m Model) renderTableContent(height int) string {
 			}
 			sourceStyled := m.getSourceBadge(v)
 
-			row := " " + keyStr + styleDim.Render(" │ ") + valueStr + styleDim.Render(" │ ") + sourceStyled
+			row := " " + keyStr + "  " + valueStr + "  " + sourceStyled
 			lines = append(lines, row)
 		}
 	}

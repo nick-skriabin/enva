@@ -96,5 +96,8 @@ func IsAncestor(ancestor, path string) bool {
 	}
 
 	// If relative path starts with "..", ancestor is not an ancestor
-	return len(rel) == 0 || (rel != ".." && rel[:2] != "..")
+	if rel == ".." || (len(rel) >= 2 && rel[:2] == "..") {
+		return false
+	}
+	return true
 }
