@@ -18,6 +18,7 @@ SHELL INTEGRATION:
 
 COMMANDS:
 
+	enva                Launch interactive TUI (default)
 	enva hook <shell>   Print shell hook code (bash, zsh, fish)
 	enva export         Print export/unset lines for current directory
 	enva set KEY=VALUE  Set a variable at current directory scope
@@ -25,7 +26,6 @@ COMMANDS:
 	enva ls             List effective environment variables (sorted)
 	enva edit           Open $EDITOR to edit local vars for current directory
 	enva run -- CMD     Run command with effective env merged into current env
-	enva tui            Launch interactive TUI
 
 ROOT BOUNDARY DISCOVERY:
  1. Walk up from cwd looking for .enva marker file (closest wins)
@@ -74,6 +74,21 @@ var rootCmd = &cobra.Command{
 
 It provides automatic shell integration for loading/unloading environment
 variables when changing directories. Use 'enva hook <shell>' to set up.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Launch TUI by default when no subcommand is provided
+		database, resolver, err := getDBAndResolver()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get cwd: %w", err)
+		}
+
+		return tui.Run(database, resolver, cwd)
+	},
 }
 
 func init() {
