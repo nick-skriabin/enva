@@ -403,10 +403,6 @@ func (m Model) renderViewModal() string {
 }
 
 func (m Model) renderHelpModal() string {
-	var content strings.Builder
-	content.WriteString(styleModalTitle.Render("Keybindings"))
-	content.WriteString("\n\n")
-
 	bindings := []struct{ key, desc string }{
 		{"j/k, ↑/↓", "Navigate up/down"},
 		{"g/G", "Go to top/bottom"},
@@ -426,17 +422,54 @@ func (m Model) renderHelpModal() string {
 		{"q", "Quit"},
 	}
 
-	for _, b := range bindings {
+	// Calculate available lines for content
+	maxLines := m.height - 10 // Account for modal padding, title, footer
+	if maxLines < 5 {
+		maxLines = 5
+	}
+
+	totalBindings := len(bindings)
+	startIdx := m.helpScrollOffset
+	if startIdx > totalBindings-maxLines {
+		startIdx = totalBindings - maxLines
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + maxLines
+	if endIdx > totalBindings {
+		endIdx = totalBindings
+	}
+
+	var content strings.Builder
+	content.WriteString(styleModalTitle.Render("Keybindings"))
+	content.WriteString("\n")
+
+	for i := startIdx; i < endIdx; i++ {
+		b := bindings[i]
 		content.WriteString(styleHelpKey.Render(fmt.Sprintf("%-12s", b.key)))
 		content.WriteString(styleHelpDesc.Render(b.desc))
+		if i < endIdx-1 {
+			content.WriteString("\n")
+		}
+	}
+
+	// Scroll indicator
+	if totalBindings > maxLines {
 		content.WriteString("\n")
+		content.WriteString(styleHelpDesc.Render(fmt.Sprintf("(%d-%d of %d) j/k to scroll", startIdx+1, endIdx, totalBindings)))
 	}
 
 	content.WriteString("\n")
-	content.WriteString(styleHelpDesc.Render("Press Esc or ? to close"))
+	content.WriteString(styleHelpDesc.Render("Esc or ? to close"))
 
 	modal := styleModalBox.Render(content.String())
 	return centerModal(modal, m.width, m.height)
+}
+
+// getHelpBindingsCount returns the number of help bindings for scroll bounds
+func (m Model) getHelpBindingsCount() int {
+	return 16 // Number of bindings in renderHelpModal
 }
 
 func (m Model) renderDeleteConfirmModal() string {

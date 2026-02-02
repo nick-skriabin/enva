@@ -299,9 +299,32 @@ func (m Model) handleViewModalKey(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleHelpModalKey(key string) (tea.Model, tea.Cmd) {
+	maxLines := m.height - 10
+	if maxLines < 5 {
+		maxLines = 5
+	}
+	totalBindings := m.getHelpBindingsCount()
+	maxOffset := totalBindings - maxLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+
 	switch key {
 	case "esc", "q", "?", "enter":
 		m.modal = ModalNone
+		m.helpScrollOffset = 0
+	case "j", "down":
+		if m.helpScrollOffset < maxOffset {
+			m.helpScrollOffset++
+		}
+	case "k", "up":
+		if m.helpScrollOffset > 0 {
+			m.helpScrollOffset--
+		}
+	case "g":
+		m.helpScrollOffset = 0
+	case "G":
+		m.helpScrollOffset = maxOffset
 	}
 	return m, nil
 }

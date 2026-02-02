@@ -87,6 +87,9 @@ type Model struct {
 	// View modal
 	viewScrollOffset int
 
+	// Help modal
+	helpScrollOffset int
+
 	// Delete confirmation
 	deleteKey string
 

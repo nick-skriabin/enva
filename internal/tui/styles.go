@@ -69,7 +69,7 @@ var (
 	styleModalBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorBrBlack).
-			Padding(1, 2)
+			Padding(0, 2)
 
 	styleModalTitle = lipgloss.NewStyle().
 			Foreground(colorCyan).
