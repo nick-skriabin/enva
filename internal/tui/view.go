@@ -35,73 +35,106 @@ func (m Model) View() string {
 
 	var b strings.Builder
 
-	// Top bar row 1: Root and Profile
-	topBar1 := m.renderTopBar1()
-	b.WriteString(topBar1)
+	// Top bar: enva │ Search: query                    profile
+	b.WriteString(m.renderTopBar())
 	b.WriteString("\n")
 
-	// Top bar row 2: Search
-	topBar2 := m.renderTopBar2()
-	b.WriteString(topBar2)
-	b.WriteString("\n")
+	// Main content with border
+	b.WriteString(m.renderMainContent())
 
-	// Table
-	table := m.renderTable()
-	b.WriteString(table)
-
-	// Status bar
-	statusBar := m.renderStatusBar()
-	b.WriteString(statusBar)
+	// Bottom help bar
+	b.WriteString(m.renderHelpBar())
 
 	return b.String()
 }
 
-func (m Model) renderTopBar1() string {
-	rootLabel := styleRoot.Render("Root: " + m.ctx.RootDir)
-	profileLabel := styleProfile.Render("Profile: " + m.ctx.Profile)
+func (m Model) renderTopBar() string {
+	// Left side: app name and search
+	appName := styleAppName.Render("enva")
+	sep := styleDim.Render(" │ ")
 
-	// View mode indicator
-	viewModeStr := "Effective"
-	if m.viewMode == ViewLocal {
-		viewModeStr = "Local"
+	var searchPart string
+	if m.searchFocused {
+		searchPart = styleDim.Render("Search: ") + m.searchInput.View()
+	} else if m.searchQuery != "" {
+		searchPart = styleDim.Render("Search: ") + styleSearchQuery.Render(m.searchQuery)
+	} else {
+		searchPart = styleDim.Render("Search: ") + styleDim.Render("...")
 	}
-	viewLabel := styleProfile.Render("[" + viewModeStr + "]")
 
-	// Pad to fill width
-	left := rootLabel
-	right := viewLabel + "  " + profileLabel
-	padding := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
+	left := appName + sep + searchPart
+
+	// Right side: profile
+	right := styleDim.Render(m.ctx.Profile)
+
+	padding := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if padding < 1 {
 		padding = 1
 	}
 
-	content := left + strings.Repeat(" ", padding) + right
-	return styleTopBar.Width(m.width).Render(content)
+	return left + strings.Repeat(" ", padding) + right
 }
 
-func (m Model) renderTopBar2() string {
-	searchLabel := styleSearchLabel.Render("Search: ")
-	var searchContent string
-	if m.searchFocused {
-		searchContent = m.searchInput.View()
-	} else if m.searchQuery != "" {
-		searchContent = styleSearchQuery.Render(m.searchQuery)
-	} else {
-		searchContent = styleSecondary.Render("(press / to search)")
+func (m Model) renderMainContent() string {
+	// Calculate available height for table (total - top bar - help bar - border)
+	contentHeight := m.height - 4
+	if contentHeight < 3 {
+		contentHeight = 3
 	}
 
-	return styleTopBar.Width(m.width).Render(searchLabel + searchContent)
+	// Build table content
+	tableContent := m.renderTableContent(contentHeight)
+
+	// Title for border
+	viewMode := "Effective"
+	if m.viewMode == ViewLocal {
+		viewMode = "Local"
+	}
+	title := fmt.Sprintf(" %s Variables (%d/%d) ", viewMode, m.cursor+1, len(m.results))
+
+	// Create bordered box
+	border := lipgloss.RoundedBorder()
+	boxStyle := lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(colorBrBlack).
+		Width(m.width - 2)
+
+	content := boxStyle.Render(tableContent)
+
+	// Inject title into top border
+	if len(content) > 0 {
+		lines := strings.Split(content, "\n")
+		if len(lines) > 0 {
+			// Find position to insert title (after the corner)
+			firstLine := lines[0]
+			titleStyled := styleBorderTitle.Render(title)
+			// Replace part of the border with title
+			if len(firstLine) > 4 {
+				runeFirst := []rune(firstLine)
+				runeTitle := []rune(titleStyled)
+				insertPos := 2
+				for i, r := range runeTitle {
+					if insertPos+i < len(runeFirst) {
+						runeFirst[insertPos+i] = r
+					}
+				}
+				lines[0] = string(runeFirst)
+			}
+			content = strings.Join(lines, "\n")
+		}
+	}
+
+	return content + "\n"
 }
 
-var styleSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-
-func (m Model) renderTable() string {
-	visibleRows := m.visibleRows()
-	tableHeight := visibleRows + 1 // +1 for header
-
-	// Calculate column widths
-	keyColWidth := 30
-	valueColWidth := m.width - keyColWidth - 6 // 6 for badge, borders, padding
+func (m Model) renderTableContent(height int) string {
+	// Column widths - border takes 1 char each side
+	innerWidth := m.width - 4
+	keyColWidth := 28
+	sourceColWidth := 10
+	// Row format: " key │ value │ source"
+	// Widths: 1 + key + 3 + value + 3 + source
+	valueColWidth := innerWidth - keyColWidth - sourceColWidth - 7
 	if valueColWidth < 20 {
 		valueColWidth = 20
 	}
@@ -109,10 +142,22 @@ func (m Model) renderTable() string {
 	var lines []string
 
 	// Header
-	header := fmt.Sprintf("  %-*s  %-*s", keyColWidth, "Key", valueColWidth, "Value")
-	lines = append(lines, styleTableHeader.Width(m.width).Render(header))
+	header := fmt.Sprintf(" %-*s │ %-*s │ %-*s",
+		keyColWidth, "Key",
+		valueColWidth, "Value",
+		sourceColWidth, "Source")
+	lines = append(lines, styleTableHeader.Render(header))
 
-	// Rows
+	// Separator - simple dashes matching the header length visually
+	sepLine := strings.Repeat("─", lipgloss.Width(header))
+	lines = append(lines, styleDim.Render(sepLine))
+
+	// Data rows
+	visibleRows := height - 2 // minus header and separator
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
 	endIdx := m.offset + visibleRows
 	if endIdx > len(m.results) {
 		endIdx = len(m.results)
@@ -123,38 +168,103 @@ func (m Model) renderTable() string {
 		v := result.Var
 		isSelected := i == m.cursor
 
-		// Badge
-		badge := m.getBadge(v)
+		// Key
+		keyStr := fmt.Sprintf("%-*s", keyColWidth, truncate(v.Key, keyColWidth))
 
-		// Key - truncate and pad to fixed width, then highlight
-		keyStr := truncate(v.Key, keyColWidth)
-		keyPadded := fmt.Sprintf("%-*s", keyColWidth, keyStr)
-		if m.searchQuery != "" && len(result.KeyMatches) > 0 {
-			keyPadded = highlightMatchesPadded(keyStr, keyColWidth, result.KeyMatches)
-		}
+		// Value
+		valueStr := fmt.Sprintf("%-*s", valueColWidth, truncate(singleLine(v.Value), valueColWidth))
 
-		// Value - truncate and pad to fixed width, then highlight
-		valueStr := truncate(singleLine(v.Value), valueColWidth)
-		valuePadded := fmt.Sprintf("%-*s", valueColWidth, valueStr)
-		if m.searchQuery != "" && len(result.ValueMatches) > 0 {
-			valuePadded = highlightMatchesPadded(valueStr, valueColWidth, result.ValueMatches)
-		}
-
-		row := fmt.Sprintf("%s %s  %s", badge, keyPadded, valuePadded)
+		// Source
+		sourceStr := fmt.Sprintf("%-*s", sourceColWidth, m.getSourceText(v))
 
 		if isSelected {
-			lines = append(lines, styleTableRowSelected.Width(m.width).Render(row))
+			// Build plain row and apply selection style
+			row := fmt.Sprintf(" %s │ %s │ %s", keyStr, valueStr, sourceStr)
+			row = padToWidth(row, innerWidth)
+			lines = append(lines, styleTableRowSelected.Render(row))
 		} else {
-			lines = append(lines, styleTableRow.Width(m.width).Render(row))
+			// Apply search highlighting and source coloring
+			if m.searchQuery != "" && len(result.KeyMatches) > 0 {
+				keyStr = highlightMatchesPadded(truncate(v.Key, keyColWidth), keyColWidth, result.KeyMatches)
+			}
+			if m.searchQuery != "" && len(result.ValueMatches) > 0 {
+				valueStr = highlightMatchesPadded(truncate(singleLine(v.Value), valueColWidth), valueColWidth, result.ValueMatches)
+			}
+			sourceStyled := m.getSourceBadge(v)
+
+			row := " " + keyStr + styleDim.Render(" │ ") + valueStr + styleDim.Render(" │ ") + sourceStyled
+			lines = append(lines, row)
 		}
 	}
 
 	// Pad remaining rows
-	for len(lines) < tableHeight {
-		lines = append(lines, strings.Repeat(" ", m.width))
+	for len(lines) < height {
+		lines = append(lines, "")
 	}
 
-	return strings.Join(lines, "\n") + "\n"
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) getSourceText(v *env.ResolvedVar) string {
+	if v.DefinedAtPath == m.ctx.CwdReal {
+		if v.Overrode {
+			return "Override"
+		}
+		return "Local"
+	}
+	return "Inherited"
+}
+
+func (m Model) getSourceBadge(v *env.ResolvedVar) string {
+	width := 10
+	if v.DefinedAtPath == m.ctx.CwdReal {
+		if v.Overrode {
+			return styleBadgeOverride.Render(fmt.Sprintf("%-*s", width, "Override"))
+		}
+		return styleBadgeLocal.Render(fmt.Sprintf("%-*s", width, "Local"))
+	}
+	return styleBadgeInherited.Render(fmt.Sprintf("%-*s", width, "Inherited"))
+}
+
+func (m Model) renderHelpBar() string {
+	// Keybindings help
+	help := []struct{ key, desc string }{
+		{"Esc", "Quit"},
+		{"e", "Edit"},
+		{"a", "Add"},
+		{"x", "Delete"},
+		{"?", "Help"},
+	}
+
+	var parts []string
+	for _, h := range help {
+		parts = append(parts, styleHelpKey.Render(h.key)+" "+styleDim.Render(h.desc))
+	}
+	left := strings.Join(parts, "  ")
+
+	// Toast or position
+	var right string
+	if m.toast != "" {
+		if m.toastIsErr {
+			right = styleToastError.Render(m.toast)
+		} else {
+			right = styleToast.Render(m.toast)
+		}
+	} else {
+		right = styleDim.Render(fmt.Sprintf("Item %d of %d", m.cursor+1, len(m.results)))
+	}
+
+	padding := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	if padding < 1 {
+		padding = 1
+	}
+
+	return left + strings.Repeat(" ", padding) + right
+}
+
+func (m Model) renderStatusBar() string {
+	// Kept for compatibility but not used in new design
+	return ""
 }
 
 func (m Model) getBadge(v *env.ResolvedVar) string {
@@ -165,39 +275,6 @@ func (m Model) getBadge(v *env.ResolvedVar) string {
 		return styleBadgeLocal.Render(badgeLocal)
 	}
 	return styleBadgeInherited.Render(badgeInherited)
-}
-
-func (m Model) renderStatusBar() string {
-	var left, right string
-
-	// Selected var info
-	if v := m.selectedVar(); v != nil {
-		left = styleStatusKey.Render("Defined at: ") + styleStatusValue.Render(v.DefinedAtPath)
-		if v.Overrode {
-			left += "  " + styleStatusKey.Render("Overrides: ") + styleStatusValue.Render(v.OverrodePath)
-		}
-	}
-
-	// Toast message
-	if m.toast != "" {
-		if m.toastIsErr {
-			right = styleToastError.Render(m.toast)
-		} else {
-			right = styleToast.Render(m.toast)
-		}
-	}
-
-	// Count
-	countStr := fmt.Sprintf("%d/%d", m.cursor+1, len(m.results))
-	right = countStr + "  " + right
-
-	padding := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
-	if padding < 1 {
-		padding = 1
-	}
-
-	content := left + strings.Repeat(" ", padding) + right
-	return styleStatusBar.Width(m.width).Render(content)
 }
 
 func (m Model) renderEditModal() string {
@@ -419,13 +496,14 @@ func centerModal(modal string, width, height int) string {
 }
 
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
 
 func singleLine(s string) string {
@@ -498,4 +576,16 @@ func highlightMatchesPadded(s string, width int, indices []int) string {
 	}
 
 	return result.String()
+}
+
+// padToWidth pads or trims a string to exact width
+func padToWidth(s string, width int) string {
+	runes := []rune(s)
+	if len(runes) < width {
+		return s + strings.Repeat(" ", width-len(runes))
+	}
+	if len(runes) > width {
+		return string(runes[:width])
+	}
+	return s
 }

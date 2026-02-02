@@ -1,17 +1,25 @@
 /*
 enva - Per-directory environment variable manager with SQLite storage
 
-USAGE WITH DIRENV:
+SHELL INTEGRATION:
 
-	Add to your .envrc file:
-	  eval "$(enva export)"
+	Add to your shell config:
 
-	This will load environment variables from enva's database based on the
-	current directory hierarchy.
+	# For bash (~/.bashrc):
+	eval "$(enva hook bash)"
+
+	# For zsh (~/.zshrc):
+	eval "$(enva hook zsh)"
+
+	# For fish (~/.config/fish/config.fish):
+	enva hook fish | source
+
+	This will automatically load/unload environment variables when you cd.
 
 COMMANDS:
 
-	enva export         Print POSIX-sh export lines for effective env at cwd
+	enva hook <shell>   Print shell hook code (bash, zsh, fish)
+	enva export         Print export/unset lines for current directory
 	enva set KEY=VALUE  Set a variable at current directory scope
 	enva unset KEY      Remove a variable from current directory scope
 	enva ls             List effective environment variables (sorted)
@@ -64,12 +72,12 @@ var rootCmd = &cobra.Command{
 	Short: "Per-directory environment variable manager",
 	Long: `enva manages per-directory environment variables stored in SQLite.
 
-It provides direnv-like activation via 'enva export' and a TUI for editing.
-Environment variables are inherited from parent directories down to the current
-working directory.`,
+It provides automatic shell integration for loading/unloading environment
+variables when changing directories. Use 'enva hook <shell>' to set up.`,
 }
 
 func init() {
+	rootCmd.AddCommand(hookCmd)
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(setCmd)
 	rootCmd.AddCommand(unsetCmd)
@@ -97,15 +105,54 @@ func getDBAndResolver() (*db.DB, *env.Resolver, error) {
 	return database, resolver, nil
 }
 
-// exportCmd prints POSIX-sh export lines
+// hookCmd prints shell hook code
+var hookCmd = &cobra.Command{
+	Use:   "hook [bash|zsh|fish]",
+	Short: "Print shell hook code for automatic environment loading",
+	Long: `Print shell-specific code that sets up automatic loading/unloading
+of environment variables when changing directories.
+
+Add to your shell config:
+  # bash: eval "$(enva hook bash)"
+  # zsh:  eval "$(enva hook zsh)"
+  # fish: enva hook fish | source`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		shellName := strings.ToLower(args[0])
+
+		switch shellName {
+		case "bash":
+			fmt.Print(bashHook)
+		case "zsh":
+			fmt.Print(zshHook)
+		case "fish":
+			fmt.Print(fishHook)
+		default:
+			return fmt.Errorf("unsupported shell: %s (supported: bash, zsh, fish)", shellName)
+		}
+		return nil
+	},
+}
+
+const bashHook = `_enva_hook() { local s=$?; eval "$(enva export)"; return $s; }
+if ! [[ "${PROMPT_COMMAND:-}" =~ _enva_hook ]]; then PROMPT_COMMAND="_enva_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; fi
+`
+
+const zshHook = `_enva_hook() { eval "$(enva export)"; }; autoload -Uz add-zsh-hook; add-zsh-hook precmd _enva_hook`
+
+const fishHook = `function _enva_hook --on-variable PWD
+    enva export | source
+end
+enva export | source
+`
+
+// exportCmd prints shell export/unset lines
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Print shell export lines for effective environment",
-	Long: `Print POSIX-sh compatible export lines for all effective environment
-variables at the current directory. Use with direnv:
-
-  # .envrc
-  eval "$(enva export)"`,
+	Short: "Print shell export/unset lines for effective environment",
+	Long: `Print shell commands to load/unload environment variables for the
+current directory. Tracks previously loaded variables and unsets them
+when they're no longer needed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		database, resolver, err := getDBAndResolver()
 		if err != nil {
@@ -123,10 +170,43 @@ variables at the current directory. Use with direnv:
 			return fmt.Errorf("failed to resolve environment: %w", err)
 		}
 
-		output := shell.FormatExportLines(ctx)
-		if output != "" {
-			fmt.Println(output)
+		// Get current vars
+		newVars := ctx.GetSortedVars()
+		newKeys := make(map[string]bool)
+		for _, v := range newVars {
+			newKeys[v.Key] = true
 		}
+
+		// Get previously loaded keys from env
+		prevKeysStr := os.Getenv("__ENVA_LOADED_KEYS")
+		var prevKeys []string
+		if prevKeysStr != "" {
+			prevKeys = strings.Split(prevKeysStr, ":")
+		}
+
+		// Unset keys that are no longer in the environment
+		for _, key := range prevKeys {
+			if key != "" && !newKeys[key] {
+				fmt.Printf("unset %s\n", key)
+			}
+		}
+
+		// Export new values
+		for _, v := range newVars {
+			fmt.Println(shell.FormatExport(v.Key, v.Value))
+		}
+
+		// Update the tracking variable
+		var keysList []string
+		for _, v := range newVars {
+			keysList = append(keysList, v.Key)
+		}
+		if len(keysList) > 0 {
+			fmt.Printf("export __ENVA_LOADED_KEYS='%s'\n", strings.Join(keysList, ":"))
+		} else if prevKeysStr != "" {
+			fmt.Println("unset __ENVA_LOADED_KEYS")
+		}
+
 		return nil
 	},
 }

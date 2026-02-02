@@ -3,123 +3,113 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Color palette
+// Use terminal's native ANSI colors (0-15) to inherit from user's theme
 var (
-	colorPrimary    = lipgloss.Color("39")  // Blue
-	colorSecondary  = lipgloss.Color("245") // Gray
-	colorSuccess    = lipgloss.Color("42")  // Green
-	colorWarning    = lipgloss.Color("214") // Orange
-	colorError      = lipgloss.Color("196") // Red
-	colorHighlight  = lipgloss.Color("226") // Yellow
-	colorLocalBadge = lipgloss.Color("42")  // Green
-	colorInherited  = lipgloss.Color("245") // Gray
-	colorOverride   = lipgloss.Color("214") // Orange
+	colorNone      = lipgloss.NoColor{}
+	colorBlack     = lipgloss.Color("0")
+	colorRed       = lipgloss.Color("1")
+	colorGreen     = lipgloss.Color("2")
+	colorYellow    = lipgloss.Color("3")
+	colorBlue      = lipgloss.Color("4")
+	colorMagenta   = lipgloss.Color("5")
+	colorCyan      = lipgloss.Color("6")
+	colorWhite     = lipgloss.Color("7")
+	colorBrBlack   = lipgloss.Color("8")  // Bright black (gray)
+	colorBrRed     = lipgloss.Color("9")
+	colorBrGreen   = lipgloss.Color("10")
+	colorBrYellow  = lipgloss.Color("11")
+	colorBrBlue    = lipgloss.Color("12")
+	colorBrMagenta = lipgloss.Color("13")
+	colorBrCyan    = lipgloss.Color("14")
+	colorBrWhite   = lipgloss.Color("15")
 )
 
-// Styles
+// Styles using terminal colors
 var (
-	styleTopBar = lipgloss.NewStyle().
-			Background(lipgloss.Color("235")).
-			Foreground(lipgloss.Color("252")).
-			Padding(0, 1)
-
-	styleRoot = lipgloss.NewStyle().
-			Foreground(colorPrimary).
+	styleAppName = lipgloss.NewStyle().
+			Foreground(colorCyan).
 			Bold(true)
 
-	styleProfile = lipgloss.NewStyle().
-			Foreground(colorSecondary)
-
-	styleSearchLabel = lipgloss.NewStyle().
-				Foreground(colorSecondary)
-
 	styleSearchQuery = lipgloss.NewStyle().
-				Foreground(colorPrimary)
+				Foreground(colorYellow).
+				Bold(true)
 
 	styleTableHeader = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Bold(true).
-				BorderBottom(true).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("238"))
+				Foreground(colorBrBlack).
+				Bold(true)
 
-	styleTableRow = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252"))
+	styleTableRow = lipgloss.NewStyle()
 
 	styleTableRowSelected = lipgloss.NewStyle().
-				Background(lipgloss.Color("236")).
-				Foreground(lipgloss.Color("252"))
+				Background(colorBrBlack).
+				Foreground(colorWhite)
 
 	styleBadgeLocal = lipgloss.NewStyle().
-			Foreground(colorLocalBadge)
+			Foreground(colorGreen)
 
 	styleBadgeInherited = lipgloss.NewStyle().
-				Foreground(colorInherited)
+				Foreground(colorCyan)
 
 	styleBadgeOverride = lipgloss.NewStyle().
-				Foreground(colorOverride)
+				Foreground(colorYellow)
 
-	styleStatusBar = lipgloss.NewStyle().
-			Background(lipgloss.Color("235")).
-			Foreground(lipgloss.Color("252")).
-			Padding(0, 1)
-
-	styleStatusKey = lipgloss.NewStyle().
-			Foreground(colorSecondary)
-
-	styleStatusValue = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("252"))
+	styleBorderTitle = lipgloss.NewStyle().
+				Foreground(colorBrBlack)
 
 	styleToast = lipgloss.NewStyle().
-			Foreground(colorSuccess)
+			Foreground(colorGreen)
 
 	styleToastError = lipgloss.NewStyle().
-			Foreground(colorError)
+			Foreground(colorRed)
 
 	styleMatchHighlight = lipgloss.NewStyle().
-				Foreground(colorHighlight).
+				Foreground(colorYellow).
 				Bold(true)
 
 	styleModalBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorPrimary).
+			BorderForeground(colorBrBlack).
 			Padding(1, 2)
 
 	styleModalTitle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true).
-			MarginBottom(1)
+			Foreground(colorCyan).
+			Bold(true)
 
 	styleModalLabel = lipgloss.NewStyle().
-			Foreground(colorSecondary)
+			Foreground(colorBrBlack)
 
 	styleModalInput = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("238")).
-			Padding(0, 1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorBrBlack)
 
 	styleModalInputFocused = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(colorPrimary).
-				Padding(0, 1)
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorCyan)
 
 	styleHelpKey = lipgloss.NewStyle().
-			Foreground(colorPrimary)
+			Foreground(colorCyan)
 
 	styleHelpDesc = lipgloss.NewStyle().
-			Foreground(colorSecondary)
+			Foreground(colorBrBlack)
 
 	styleError = lipgloss.NewStyle().
-			Foreground(colorError)
+			Foreground(colorRed)
 
 	styleConfirm = lipgloss.NewStyle().
-			Foreground(colorWarning).
+			Foreground(colorYellow).
+			Bold(true)
+
+	styleDim = lipgloss.NewStyle().
+			Foreground(colorBrBlack)
+
+	styleCursor = lipgloss.NewStyle().
+			Foreground(colorCyan).
 			Bold(true)
 )
 
 // Badge characters
 const (
-	badgeLocal     = "●" // Local var
-	badgeInherited = "○" // Inherited var
-	badgeOverride  = "▲" // Overridden (local override of inherited)
+	badgeLocal     = "●"
+	badgeInherited = "○"
+	badgeOverride  = "▲"
 )

@@ -228,8 +228,8 @@ func (m *Model) popUndo() *UndoAction {
 
 // visibleRows returns the number of visible table rows.
 func (m *Model) visibleRows() int {
-	// Height minus top bar (2), header (1), status bar (1)
-	rows := m.height - 4
+	// Height minus: top bar (1), border (2), header+separator (2), help bar (1)
+	rows := m.height - 6
 	if rows < 1 {
 		rows = 1
 	}
