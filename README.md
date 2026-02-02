@@ -1,6 +1,6 @@
 # enva
 
-![Eenva](./screenshots/enva.png)
+![Eenva](screenshots/enva.png)
 
 Per-directory environment variable manager with automatic shell integration.
 
