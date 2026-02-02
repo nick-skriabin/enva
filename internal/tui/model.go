@@ -37,6 +37,7 @@ type FocusField int
 const (
 	FocusKey FocusField = iota
 	FocusValue
+	FocusDescription
 )
 
 // UndoAction represents an action that can be undone.
@@ -73,12 +74,13 @@ type Model struct {
 	results []*search.SearchResult
 
 	// Modal state
-	modal        ModalType
-	editIsNew    bool // true if adding new var
-	editKeyInput textinput.Model
-	editValInput textarea.Model
-	editFocus    FocusField
-	editError    string
+	modal         ModalType
+	editIsNew     bool // true if adding new var
+	editKeyInput  textinput.Model
+	editValInput  textarea.Model
+	editDescInput textinput.Model
+	editFocus     FocusField
+	editError     string
 
 	// Bulk import
 	bulkInput textarea.Model
@@ -123,22 +125,28 @@ func NewModel(database *db.DB, resolver *env.Resolver, ctx *env.ResolveContext) 
 	vi.CharLimit = 65536
 	vi.SetHeight(5)
 
+	// Edit description input
+	di := textinput.New()
+	di.Placeholder = "optional description"
+	di.CharLimit = 256
+
 	// Bulk import textarea
 	bi := textarea.New()
-	bi.Placeholder = "KEY=value\nexport KEY2=value2\n# comment"
+	bi.Placeholder = "KEY=value # description\nexport KEY2=value2\n# comment"
 	bi.CharLimit = 1000000
 	bi.SetHeight(15)
 
 	m := Model{
-		db:           database,
-		resolver:     resolver,
-		ctx:          ctx,
-		viewMode:     ViewEffective,
-		searchInput:  si,
-		editKeyInput: ki,
-		editValInput: vi,
-		bulkInput:    bi,
-		undoStack:    make([]UndoAction, 0),
+		db:            database,
+		resolver:      resolver,
+		ctx:           ctx,
+		viewMode:      ViewEffective,
+		searchInput:   si,
+		editKeyInput:  ki,
+		editValInput:  vi,
+		editDescInput: di,
+		bulkInput:     bi,
+		undoStack:     make([]UndoAction, 0),
 	}
 
 	m.refreshResults()

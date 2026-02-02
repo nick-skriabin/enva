@@ -48,7 +48,7 @@ func TestSetAndGetVar(t *testing.T) {
 	value := "secret123"
 
 	// Set variable
-	err := db.SetVar(path, profile, key, value)
+	err := db.SetVar(path, profile, key, value, "")
 	if err != nil {
 		t.Fatalf("SetVar failed: %v", err)
 	}
@@ -85,10 +85,10 @@ func TestSetVarUpsert(t *testing.T) {
 	key := "KEY"
 
 	// Set initial value
-	db.SetVar(path, profile, key, "first")
+	db.SetVar(path, profile, key, "first", "")
 
 	// Update value
-	db.SetVar(path, profile, key, "second")
+	db.SetVar(path, profile, key, "second", "")
 
 	// Get value
 	v, _ := db.GetVar(path, profile, key)
@@ -119,7 +119,7 @@ func TestDeleteVar(t *testing.T) {
 	key := "KEY"
 
 	// Set and then delete
-	db.SetVar(path, profile, key, "value")
+	db.SetVar(path, profile, key, "value", "")
 	err := db.DeleteVar(path, profile, key)
 	if err != nil {
 		t.Fatalf("DeleteVar failed: %v", err)
@@ -140,12 +140,12 @@ func TestGetVarsForPath(t *testing.T) {
 	profile := "default"
 
 	// Set multiple variables
-	db.SetVar(path, profile, "KEY1", "value1")
-	db.SetVar(path, profile, "KEY2", "value2")
-	db.SetVar(path, profile, "KEY3", "value3")
+	db.SetVar(path, profile, "KEY1", "value1", "")
+	db.SetVar(path, profile, "KEY2", "value2", "")
+	db.SetVar(path, profile, "KEY3", "value3", "")
 
 	// Also set for different path
-	db.SetVar("/other/path", profile, "OTHER", "other")
+	db.SetVar("/other/path", profile, "OTHER", "other", "")
 
 	vars, err := db.GetVarsForPath(path, profile)
 	if err != nil {
@@ -164,10 +164,10 @@ func TestGetVarsForPaths(t *testing.T) {
 	profile := "default"
 
 	// Set variables at different paths
-	db.SetVar("/root", profile, "ROOT_VAR", "root")
-	db.SetVar("/root/child", profile, "CHILD_VAR", "child")
-	db.SetVar("/root/child/grandchild", profile, "GRANDCHILD_VAR", "grandchild")
-	db.SetVar("/other", profile, "OTHER_VAR", "other")
+	db.SetVar("/root", profile, "ROOT_VAR", "root", "")
+	db.SetVar("/root/child", profile, "CHILD_VAR", "child", "")
+	db.SetVar("/root/child/grandchild", profile, "GRANDCHILD_VAR", "grandchild", "")
+	db.SetVar("/other", profile, "OTHER_VAR", "other", "")
 
 	paths := []string{"/root", "/root/child", "/root/child/grandchild"}
 	vars, err := db.GetVarsForPaths(paths, profile)
@@ -207,8 +207,8 @@ func TestProfileIsolation(t *testing.T) {
 	path := "/test/path"
 
 	// Set same key in different profiles
-	db.SetVar(path, "default", "KEY", "default_value")
-	db.SetVar(path, "production", "KEY", "prod_value")
+	db.SetVar(path, "default", "KEY", "default_value", "")
+	db.SetVar(path, "production", "KEY", "prod_value", "")
 
 	// Get from each profile
 	defaultVar, _ := db.GetVar(path, "default", "KEY")
@@ -228,10 +228,10 @@ func TestSetVarsBatch(t *testing.T) {
 
 	path := "/test/path"
 	profile := "default"
-	vars := map[string]string{
-		"KEY1": "value1",
-		"KEY2": "value2",
-		"KEY3": "value3",
+	vars := map[string]VarData{
+		"KEY1": {Value: "value1", Description: "desc1"},
+		"KEY2": {Value: "value2", Description: ""},
+		"KEY3": {Value: "value3", Description: "desc3"},
 	}
 
 	err := db.SetVarsBatch(path, profile, vars)
@@ -254,9 +254,9 @@ func TestDeleteVarsBatch(t *testing.T) {
 	profile := "default"
 
 	// Set multiple vars
-	db.SetVar(path, profile, "KEY1", "value1")
-	db.SetVar(path, profile, "KEY2", "value2")
-	db.SetVar(path, profile, "KEY3", "value3")
+	db.SetVar(path, profile, "KEY1", "value1", "")
+	db.SetVar(path, profile, "KEY2", "value2", "")
+	db.SetVar(path, profile, "KEY3", "value3", "")
 
 	// Delete two of them
 	err := db.DeleteVarsBatch(path, profile, []string{"KEY1", "KEY3"})
@@ -292,9 +292,9 @@ func TestDeleteVarsForPath(t *testing.T) {
 	path := "/test/path"
 	profile := "default"
 
-	db.SetVar(path, profile, "KEY1", "value1")
-	db.SetVar(path, profile, "KEY2", "value2")
-	db.SetVar("/other", profile, "OTHER", "other")
+	db.SetVar(path, profile, "KEY1", "value1", "")
+	db.SetVar(path, profile, "KEY2", "value2", "")
+	db.SetVar("/other", profile, "OTHER", "other", "")
 
 	err := db.DeleteVarsForPath(path, profile)
 	if err != nil {

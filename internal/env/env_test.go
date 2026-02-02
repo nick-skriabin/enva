@@ -85,7 +85,7 @@ func TestResolverSetAndDelete(t *testing.T) {
 	resolver := NewResolver(database, "default")
 
 	// Set variable
-	err := resolver.SetVar(testDir, "API_KEY", "secret")
+	err := resolver.SetVar(testDir, "API_KEY", "secret", "test description")
 	if err != nil {
 		t.Fatalf("SetVar failed: %v", err)
 	}
@@ -130,11 +130,11 @@ func TestResolveInheritance(t *testing.T) {
 	resolver := NewResolver(database, "default")
 
 	// Set variables at different levels
-	resolver.SetVar(root, "ROOT_VAR", "root_value")
-	resolver.SetVar(root, "SHARED", "from_root")
-	resolver.SetVar(child, "CHILD_VAR", "child_value")
-	resolver.SetVar(child, "SHARED", "from_child") // Override
-	resolver.SetVar(grandchild, "GRANDCHILD_VAR", "grandchild_value")
+	resolver.SetVar(root, "ROOT_VAR", "root_value", "")
+	resolver.SetVar(root, "SHARED", "from_root", "")
+	resolver.SetVar(child, "CHILD_VAR", "child_value", "")
+	resolver.SetVar(child, "SHARED", "from_child", "") // Override
+	resolver.SetVar(grandchild, "GRANDCHILD_VAR", "grandchild_value", "")
 
 	// Resolve at grandchild level
 	ctx, err := resolver.Resolve(grandchild)
@@ -249,15 +249,15 @@ func TestSyncLocalVars(t *testing.T) {
 	resolver := NewResolver(database, "default")
 
 	// Set initial vars
-	resolver.SetVar(testDir, "KEEP", "keep_value")
-	resolver.SetVar(testDir, "UPDATE", "old_value")
-	resolver.SetVar(testDir, "DELETE", "delete_value")
+	resolver.SetVar(testDir, "KEEP", "keep_value", "")
+	resolver.SetVar(testDir, "UPDATE", "old_value", "")
+	resolver.SetVar(testDir, "DELETE", "delete_value", "")
 
 	// Sync with new state
-	newVars := map[string]string{
-		"KEEP":   "keep_value",   // Keep same
-		"UPDATE": "new_value",    // Update
-		"NEW":    "new_var",      // Add
+	newVars := map[string]db.VarData{
+		"KEEP":   {Value: "keep_value", Description: ""},   // Keep same
+		"UPDATE": {Value: "new_value", Description: ""},    // Update
+		"NEW":    {Value: "new_var", Description: ""},      // Add
 		// DELETE is missing, should be deleted
 	}
 
@@ -300,9 +300,9 @@ func TestSetVarsBatch(t *testing.T) {
 
 	resolver := NewResolver(database, "default")
 
-	vars := map[string]string{
-		"KEY1": "value1",
-		"KEY2": "value2",
+	vars := map[string]db.VarData{
+		"KEY1": {Value: "value1", Description: ""},
+		"KEY2": {Value: "value2", Description: ""},
 	}
 
 	err := resolver.SetVarsBatch(testDir, vars)
@@ -326,9 +326,9 @@ func TestDeleteVarsBatch(t *testing.T) {
 	resolver := NewResolver(database, "default")
 
 	// Set multiple vars
-	resolver.SetVar(testDir, "KEY1", "value1")
-	resolver.SetVar(testDir, "KEY2", "value2")
-	resolver.SetVar(testDir, "KEY3", "value3")
+	resolver.SetVar(testDir, "KEY1", "value1", "")
+	resolver.SetVar(testDir, "KEY2", "value2", "")
+	resolver.SetVar(testDir, "KEY3", "value3", "")
 
 	// Delete batch
 	err := resolver.DeleteVarsBatch(testDir, []string{"KEY1", "KEY3"})

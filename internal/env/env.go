@@ -16,6 +16,7 @@ const DefaultProfile = "default"
 type ResolvedVar struct {
 	Key           string
 	Value         string
+	Description   string
 	DefinedAtPath string
 	Overrode      bool
 	OverrodePath  string
@@ -84,24 +85,29 @@ func (r *Resolver) Resolve(cwd string) (*ResolveContext, error) {
 	}
 
 	// Group vars by path
-	varsByPath := make(map[string]map[string]string)
+	type varInfo struct {
+		Value       string
+		Description string
+	}
+	varsByPath := make(map[string]map[string]varInfo)
 	for _, v := range allVars {
 		if varsByPath[v.Path] == nil {
-			varsByPath[v.Path] = make(map[string]string)
+			varsByPath[v.Path] = make(map[string]varInfo)
 		}
-		varsByPath[v.Path][v.Key] = v.Value
+		varsByPath[v.Path][v.Key] = varInfo{Value: v.Value, Description: v.Description}
 	}
 
 	// Merge in chain order (parent first, child overrides)
 	resolved := make(map[string]*ResolvedVar)
 	for _, path := range chain {
 		pathVars := varsByPath[path]
-		for key, value := range pathVars {
+		for key, info := range pathVars {
 			if existing, ok := resolved[key]; ok {
 				// Override
 				resolved[key] = &ResolvedVar{
 					Key:           key,
-					Value:         value,
+					Value:         info.Value,
+					Description:   info.Description,
 					DefinedAtPath: path,
 					Overrode:      true,
 					OverrodePath:  existing.DefinedAtPath,
@@ -109,7 +115,8 @@ func (r *Resolver) Resolve(cwd string) (*ResolveContext, error) {
 			} else {
 				resolved[key] = &ResolvedVar{
 					Key:           key,
-					Value:         value,
+					Value:         info.Value,
+					Description:   info.Description,
 					DefinedAtPath: path,
 					Overrode:      false,
 				}
@@ -167,12 +174,12 @@ func (r *Resolver) GetLocalVarsFromDB(path string) ([]db.EnvVar, error) {
 }
 
 // SetVar sets a variable at the given path.
-func (r *Resolver) SetVar(path, key, value string) error {
+func (r *Resolver) SetVar(path, key, value, description string) error {
 	canonical, err := envpath.Canonicalize(path)
 	if err != nil {
 		return err
 	}
-	return r.db.SetVar(canonical, r.profile, key, value)
+	return r.db.SetVar(canonical, r.profile, key, value, description)
 }
 
 // DeleteVar deletes a variable at the given path.
@@ -185,7 +192,7 @@ func (r *Resolver) DeleteVar(path, key string) error {
 }
 
 // SetVarsBatch sets multiple variables at the given path.
-func (r *Resolver) SetVarsBatch(path string, vars map[string]string) error {
+func (r *Resolver) SetVarsBatch(path string, vars map[string]db.VarData) error {
 	canonical, err := envpath.Canonicalize(path)
 	if err != nil {
 		return err
@@ -203,7 +210,7 @@ func (r *Resolver) DeleteVarsBatch(path string, keys []string) error {
 }
 
 // SyncLocalVars synchronizes local vars: adds/updates from newVars, deletes keys not in newVars.
-func (r *Resolver) SyncLocalVars(path string, newVars map[string]string) error {
+func (r *Resolver) SyncLocalVars(path string, newVars map[string]db.VarData) error {
 	canonical, err := envpath.Canonicalize(path)
 	if err != nil {
 		return err

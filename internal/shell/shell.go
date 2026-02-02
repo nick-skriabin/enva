@@ -8,11 +8,26 @@ import (
 	"github.com/nick-skriabin/enva/internal/env"
 )
 
+// ParsedVar holds parsed value and description.
+type ParsedVar struct {
+	Value       string
+	Description string
+}
+
 // FormatExport formats a single variable as a POSIX-sh export line.
 // Uses robust single-quote quoting: single quotes around value,
-// with embedded single quotes escaped as '\”
+// with embedded single quotes escaped as '\"
 func FormatExport(key, value string) string {
 	escaped := escapeSingleQuote(value)
+	return fmt.Sprintf("export %s='%s'", key, escaped)
+}
+
+// FormatExportWithDesc formats an export line with optional description as comment.
+func FormatExportWithDesc(key, value, description string) string {
+	escaped := escapeSingleQuote(value)
+	if description != "" {
+		return fmt.Sprintf("export %s='%s' # %s", key, escaped, description)
+	}
 	return fmt.Sprintf("export %s='%s'", key, escaped)
 }
 
@@ -48,18 +63,26 @@ func escapeSingleQuote(s string) string {
 	return strings.ReplaceAll(s, "'", `'\''`)
 }
 
-// ParseKeyValue parses a KEY=value line.
-// Supports:
-// - KEY=value
-// - export KEY=value (strips "export ")
-// - KEY='value' or KEY="value" (strips surrounding quotes)
+// ParseKeyValue parses a KEY=value line (without description).
 // Returns key, value, ok.
 func ParseKeyValue(line string) (string, string, bool) {
+	key, parsed, ok := ParseKeyValueWithDesc(line)
+	return key, parsed.Value, ok
+}
+
+// ParseKeyValueWithDesc parses a KEY=value line with optional trailing # description.
+// Supports:
+// - KEY=value
+// - KEY=value # description
+// - export KEY=value
+// - KEY='value' or KEY="value" (strips surrounding quotes)
+// Returns key, ParsedVar{value, description}, ok.
+func ParseKeyValueWithDesc(line string) (string, ParsedVar, bool) {
 	line = strings.TrimSpace(line)
 
 	// Skip empty lines and comments
 	if line == "" || strings.HasPrefix(line, "#") {
-		return "", "", false
+		return "", ParsedVar{}, false
 	}
 
 	// Strip "export " prefix
@@ -71,21 +94,61 @@ func ParseKeyValue(line string) (string, string, bool) {
 	// Find the first '='
 	idx := strings.Index(line, "=")
 	if idx == -1 {
-		return "", "", false
+		return "", ParsedVar{}, false
 	}
 
 	key := strings.TrimSpace(line[:idx])
-	value := line[idx+1:]
+	rest := line[idx+1:]
 
 	// Validate key
 	if !IsValidKey(key) {
-		return "", "", false
+		return "", ParsedVar{}, false
 	}
 
-	// Strip surrounding quotes from value
-	value = stripQuotes(value)
+	// Parse value and description
+	value, description := parseValueAndDescription(rest)
 
-	return key, value, true
+	return key, ParsedVar{Value: value, Description: description}, true
+}
+
+// parseValueAndDescription extracts value and trailing # description.
+// Handles quoted values correctly (# inside quotes is not a comment).
+func parseValueAndDescription(s string) (value, description string) {
+	if s == "" {
+		return "", ""
+	}
+
+	// Check if value is quoted (after trimming leading space only for quote check)
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) >= 2 && (trimmed[0] == '\'' || trimmed[0] == '"') {
+		quote := trimmed[0]
+		// Find closing quote
+		endQuote := -1
+		for i := 1; i < len(trimmed); i++ {
+			if trimmed[i] == quote {
+				endQuote = i
+				break
+			}
+		}
+		if endQuote > 0 {
+			value = trimmed[1:endQuote]
+			rest := strings.TrimSpace(trimmed[endQuote+1:])
+			if strings.HasPrefix(rest, "#") {
+				description = strings.TrimSpace(rest[1:])
+			}
+			return value, description
+		}
+	}
+
+	// Unquoted value - find # for description (space before # required)
+	if idx := strings.Index(s, " #"); idx >= 0 {
+		value = s[:idx]
+		description = strings.TrimSpace(s[idx+2:])
+	} else {
+		value = s
+	}
+
+	return value, description
 }
 
 // stripQuotes removes surrounding single or double quotes.
@@ -120,7 +183,7 @@ func IsValidKey(key string) bool {
 	return true
 }
 
-// ParseEnvFile parses multiple KEY=value lines.
+// ParseEnvFile parses multiple KEY=value lines (without descriptions).
 // Returns a map of key->value and a list of invalid lines.
 // Last value wins for duplicate keys.
 func ParseEnvFile(content string) (map[string]string, []string) {
@@ -137,6 +200,31 @@ func ParseEnvFile(content string) (map[string]string, []string) {
 		key, value, ok := ParseKeyValue(line)
 		if ok {
 			result[key] = value
+		} else {
+			invalid = append(invalid, line)
+		}
+	}
+
+	return result, invalid
+}
+
+// ParseEnvFileWithDesc parses multiple KEY=value lines with descriptions.
+// Returns a map of key->ParsedVar and a list of invalid lines.
+// Last value wins for duplicate keys.
+func ParseEnvFileWithDesc(content string) (map[string]ParsedVar, []string) {
+	result := make(map[string]ParsedVar)
+	var invalid []string
+
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, parsed, ok := ParseKeyValueWithDesc(line)
+		if ok {
+			result[key] = parsed
 		} else {
 			invalid = append(invalid, line)
 		}

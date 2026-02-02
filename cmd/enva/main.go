@@ -85,6 +85,8 @@ func init() {
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(tuiCmd)
+
+	exportCmd.Flags().BoolVar(&exportInternal, "internal", false, "Include internal tracking variables (for shell hooks)")
 }
 
 // Helper to get database and resolver
@@ -134,17 +136,19 @@ Add to your shell config:
 	},
 }
 
-const bashHook = `_enva_hook() { local s=$?; eval "$(enva export)"; return $s; }
+const bashHook = `_enva_hook() { local s=$?; eval "$(enva export --internal)"; return $s; }
 if ! [[ "${PROMPT_COMMAND:-}" =~ _enva_hook ]]; then PROMPT_COMMAND="_enva_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; fi
 `
 
-const zshHook = `_enva_hook() { eval "$(enva export)"; }; autoload -Uz add-zsh-hook; add-zsh-hook precmd _enva_hook`
+const zshHook = `_enva_hook() { eval "$(enva export --internal)"; }; autoload -Uz add-zsh-hook; add-zsh-hook precmd _enva_hook`
 
 const fishHook = `function _enva_hook --on-variable PWD
-    enva export | source
+    enva export --internal | source
 end
-enva export | source
+enva export --internal | source
 `
+
+var exportInternal bool
 
 // exportCmd prints shell export/unset lines
 var exportCmd = &cobra.Command{
@@ -152,7 +156,9 @@ var exportCmd = &cobra.Command{
 	Short: "Print shell export/unset lines for effective environment",
 	Long: `Print shell commands to load/unload environment variables for the
 current directory. Tracks previously loaded variables and unsets them
-when they're no longer needed.`,
+when they're no longer needed.
+
+Use --internal flag for shell hook integration (includes tracking variables).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		database, resolver, err := getDBAndResolver()
 		if err != nil {
@@ -204,9 +210,9 @@ when they're no longer needed.`,
 			}
 		}
 
-		// Export new values
+		// Export new values (with description as comment if present)
 		for _, v := range newVars {
-			fmt.Println(shell.FormatExport(v.Key, v.Value))
+			fmt.Println(shell.FormatExportWithDesc(v.Key, v.Value, v.Description))
 			if !prevKeysSet[v.Key] {
 				loadCount++
 			}
@@ -218,24 +224,26 @@ when they're no longer needed.`,
 			keysList = append(keysList, v.Key)
 		}
 
-		// Track current path
+		// Track current path (only with --internal flag for shell hooks)
 		cwdReal := ctx.CwdReal
-		if len(keysList) > 0 {
-			fmt.Printf("export __ENVA_LOADED_KEYS='%s'\n", strings.Join(keysList, ":"))
-			fmt.Printf("export __ENVA_LOADED_PATH='%s'\n", cwdReal)
-		} else if prevKeysStr != "" {
-			fmt.Println("unset __ENVA_LOADED_KEYS")
-			fmt.Println("unset __ENVA_LOADED_PATH")
-		}
+		if exportInternal {
+			if len(keysList) > 0 {
+				fmt.Printf("export __ENVA_LOADED_KEYS='%s'\n", strings.Join(keysList, ":"))
+				fmt.Printf("export __ENVA_LOADED_PATH='%s'\n", cwdReal)
+			} else if prevKeysStr != "" {
+				fmt.Println("unset __ENVA_LOADED_KEYS")
+				fmt.Println("unset __ENVA_LOADED_PATH")
+			}
 
-		// Print status message to stderr
-		if unsetCount > 0 && len(newVars) == 0 {
-			fmt.Fprintf(os.Stderr, "enva: unloaded %d var(s)\n", unsetCount)
-		} else if loadCount > 0 && prevPath != cwdReal {
-			fmt.Fprintf(os.Stderr, "enva: loaded %d var(s)\n", len(newVars))
-		} else if unsetCount > 0 || loadCount > 0 {
-			if prevPath != cwdReal {
+			// Print status message to stderr (only for shell hooks)
+			if unsetCount > 0 && len(newVars) == 0 {
+				fmt.Fprintf(os.Stderr, "enva: unloaded %d var(s)\n", unsetCount)
+			} else if loadCount > 0 && prevPath != cwdReal {
 				fmt.Fprintf(os.Stderr, "enva: loaded %d var(s)\n", len(newVars))
+			} else if unsetCount > 0 || loadCount > 0 {
+				if prevPath != cwdReal {
+					fmt.Fprintf(os.Stderr, "enva: loaded %d var(s)\n", len(newVars))
+				}
 			}
 		}
 
@@ -269,7 +277,7 @@ var setCmd = &cobra.Command{
 			return fmt.Errorf("failed to get cwd: %w", err)
 		}
 
-		if err := resolver.SetVar(cwd, key, value); err != nil {
+		if err := resolver.SetVar(cwd, key, value, ""); err != nil {
 			return fmt.Errorf("failed to set variable: %w", err)
 		}
 
@@ -416,10 +424,16 @@ directory. After saving, parses the file and applies changes (upserts/deletes).`
 			return fmt.Errorf("failed to read temp file: %w", err)
 		}
 
-		// Parse new content
-		newVars, invalid := shell.ParseEnvFile(string(newContent))
+		// Parse new content with descriptions
+		parsed, invalid := shell.ParseEnvFileWithDesc(string(newContent))
 		if len(invalid) > 0 {
 			return fmt.Errorf("invalid lines in file: %v", invalid)
+		}
+
+		// Convert to db.VarData
+		newVars := make(map[string]db.VarData)
+		for k, v := range parsed {
+			newVars[k] = db.VarData{Value: v.Value, Description: v.Description}
 		}
 
 		// Sync vars

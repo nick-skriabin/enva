@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/nick-skriabin/enva/internal/db"
 	"github.com/nick-skriabin/enva/internal/shell"
 )
 
@@ -111,12 +112,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", "e":
 		// Edit selected
 		if v := m.selectedVar(); v != nil {
-			m.openEditModal(v.Key, v.Value, false)
+			m.openEditModal(v.Key, v.Value, v.Description, false)
 		}
 
 	case "a":
 		// Add new
-		m.openEditModal("", "", true)
+		m.openEditModal("", "", "", true)
 
 	case "A":
 		// Bulk import
@@ -244,14 +245,19 @@ func (m Model) handleEditModalKey(msg tea.KeyMsg, key string) (tea.Model, tea.Cm
 		return m.saveEdit()
 
 	case "tab":
-		// Switch focus
-		if m.editFocus == FocusKey {
+		// Switch focus: Key -> Value -> Description -> Key
+		m.editKeyInput.Blur()
+		m.editValInput.Blur()
+		m.editDescInput.Blur()
+		switch m.editFocus {
+		case FocusKey:
 			m.editFocus = FocusValue
-			m.editKeyInput.Blur()
 			m.editValInput.Focus()
-		} else {
+		case FocusValue:
+			m.editFocus = FocusDescription
+			m.editDescInput.Focus()
+		case FocusDescription:
 			m.editFocus = FocusKey
-			m.editValInput.Blur()
 			m.editKeyInput.Focus()
 		}
 		return m, nil
@@ -259,10 +265,13 @@ func (m Model) handleEditModalKey(msg tea.KeyMsg, key string) (tea.Model, tea.Cm
 
 	// Forward to focused input
 	var cmd tea.Cmd
-	if m.editFocus == FocusKey {
+	switch m.editFocus {
+	case FocusKey:
 		m.editKeyInput, cmd = m.editKeyInput.Update(msg)
-	} else {
+	case FocusValue:
 		m.editValInput, cmd = m.editValInput.Update(msg)
+	case FocusDescription:
+		m.editDescInput, cmd = m.editDescInput.Update(msg)
 	}
 	return m, cmd
 }
@@ -340,21 +349,24 @@ func (m Model) handleDeleteConfirmKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) openEditModal(key, value string, isNew bool) {
+func (m *Model) openEditModal(key, value, description string, isNew bool) {
 	m.modal = ModalEdit
 	m.editIsNew = isNew
 	m.editKeyInput.SetValue(key)
 	m.editValInput.SetValue(value)
+	m.editDescInput.SetValue(description)
 	m.editError = ""
 
 	if isNew {
 		m.editFocus = FocusKey
 		m.editKeyInput.Focus()
 		m.editValInput.Blur()
+		m.editDescInput.Blur()
 	} else {
 		m.editFocus = FocusValue
 		m.editKeyInput.Blur()
 		m.editValInput.Focus()
+		m.editDescInput.Blur()
 	}
 }
 
@@ -370,6 +382,7 @@ var keyRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 func (m Model) saveEdit() (tea.Model, tea.Cmd) {
 	key := m.editKeyInput.Value()
 	value := m.editValInput.Value()
+	description := m.editDescInput.Value()
 
 	// Validate key
 	if !keyRegex.MatchString(key) {
@@ -390,7 +403,7 @@ func (m Model) saveEdit() (tea.Model, tea.Cmd) {
 	}
 
 	// Set the variable
-	if err := m.resolver.SetVar(m.ctx.CwdReal, key, value); err != nil {
+	if err := m.resolver.SetVar(m.ctx.CwdReal, key, value, description); err != nil {
 		m.editError = fmt.Sprintf("Error: %v", err)
 		return m, nil
 	}
@@ -422,7 +435,7 @@ func (m Model) saveEdit() (tea.Model, tea.Cmd) {
 
 func (m Model) saveBulkImport() (tea.Model, tea.Cmd) {
 	content := m.bulkInput.Value()
-	parsed, invalid := shell.ParseEnvFile(content)
+	parsed, invalid := shell.ParseEnvFileWithDesc(content)
 
 	if len(invalid) > 0 {
 		m.bulkError = fmt.Sprintf("Invalid lines: %v", invalid)
@@ -434,6 +447,12 @@ func (m Model) saveBulkImport() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Convert to db.VarData
+	varData := make(map[string]db.VarData)
+	for k, v := range parsed {
+		varData[k] = db.VarData{Value: v.Value, Description: v.Description}
+	}
+
 	// Get existing for undo
 	oldVars, _ := m.resolver.GetLocalVarsFromDB(m.ctx.CwdReal)
 	oldMap := make(map[string]string)
@@ -442,7 +461,7 @@ func (m Model) saveBulkImport() (tea.Model, tea.Cmd) {
 	}
 
 	// Set all vars
-	if err := m.resolver.SetVarsBatch(m.ctx.CwdReal, parsed); err != nil {
+	if err := m.resolver.SetVarsBatch(m.ctx.CwdReal, varData); err != nil {
 		m.bulkError = fmt.Sprintf("Error: %v", err)
 		return m, nil
 	}
@@ -527,16 +546,16 @@ func (m Model) handleUndo() (tea.Model, tea.Cmd) {
 	switch action.Type {
 	case "set":
 		if action.HadVal {
-			// Restore old value
-			err = m.resolver.SetVar(m.ctx.CwdReal, action.Key, action.OldVal)
+			// Restore old value (description is lost on undo)
+			err = m.resolver.SetVar(m.ctx.CwdReal, action.Key, action.OldVal, "")
 		} else {
 			// Delete the new key
 			err = m.resolver.DeleteVar(m.ctx.CwdReal, action.Key)
 		}
 
 	case "delete":
-		// Restore deleted key
-		err = m.resolver.SetVar(m.ctx.CwdReal, action.Key, action.OldVal)
+		// Restore deleted key (description is lost on undo)
+		err = m.resolver.SetVar(m.ctx.CwdReal, action.Key, action.OldVal, "")
 
 	case "import":
 		// This is complex - we'd need to restore old state

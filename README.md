@@ -1,5 +1,7 @@
 # enva
 
+![/screenshots/enva.png](Enva)
+
 Per-directory environment variable manager with automatic shell integration.
 
 enva stores environment variables in a SQLite database and automatically loads/unloads them as you navigate directories. Variables are inherited from parent directories, allowing you to set project-wide defaults and override them in subdirectories.

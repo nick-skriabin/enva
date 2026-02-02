@@ -116,21 +116,23 @@ func (m Model) renderMainContent() string {
 func (m Model) renderTableContent(height int) string {
 	// Column widths - border takes 1 char each side
 	innerWidth := m.width - 4
-	keyColWidth := 28
+	keyColWidth := 24
 	sourceColWidth := 10
-	// Row format: " key  value  source"
-	// Widths: 1 + key + 2 + value + 2 + source
-	valueColWidth := innerWidth - keyColWidth - sourceColWidth - 5
-	if valueColWidth < 20 {
-		valueColWidth = 20
+	descColWidth := 20
+	// Row format: " key  value  desc  source"
+	// Widths: 1 + key + 2 + value + 2 + desc + 2 + source
+	valueColWidth := innerWidth - keyColWidth - descColWidth - sourceColWidth - 7
+	if valueColWidth < 15 {
+		valueColWidth = 15
 	}
 
 	var lines []string
 
 	// Header
-	header := fmt.Sprintf(" %-*s  %-*s  %-*s",
+	header := fmt.Sprintf(" %-*s  %-*s  %-*s  %-*s",
 		keyColWidth, "Key",
 		valueColWidth, "Value",
+		descColWidth, "Description",
 		sourceColWidth, "Source")
 	lines = append(lines, styleTableHeader.Render(header))
 
@@ -160,12 +162,15 @@ func (m Model) renderTableContent(height int) string {
 		// Value
 		valueStr := fmt.Sprintf("%-*s", valueColWidth, truncate(singleLine(v.Value), valueColWidth))
 
+		// Description
+		descStr := fmt.Sprintf("%-*s", descColWidth, truncate(v.Description, descColWidth))
+
 		// Source
 		sourceStr := fmt.Sprintf("%-*s", sourceColWidth, m.getSourceText(v))
 
 		if isSelected {
 			// Build plain row and apply selection style
-			row := fmt.Sprintf(" %s  %s  %s", keyStr, valueStr, sourceStr)
+			row := fmt.Sprintf(" %s  %s  %s  %s", keyStr, valueStr, descStr, sourceStr)
 			row = padToWidth(row, innerWidth)
 			lines = append(lines, styleTableRowSelected.Render(row))
 		} else {
@@ -176,9 +181,11 @@ func (m Model) renderTableContent(height int) string {
 			if m.searchQuery != "" && len(result.ValueMatches) > 0 {
 				valueStr = highlightMatchesPadded(truncate(singleLine(v.Value), valueColWidth), valueColWidth, result.ValueMatches)
 			}
+			// Description in dim style when not selected
+			descStyled := styleDim.Render(descStr)
 			sourceStyled := m.getSourceBadge(v)
 
-			row := " " + keyStr + "  " + valueStr + "  " + sourceStyled
+			row := " " + keyStr + "  " + valueStr + "  " + descStyled + "  " + sourceStyled
 			lines = append(lines, row)
 		}
 	}
@@ -302,6 +309,17 @@ func (m Model) renderEditModal() string {
 		content.WriteString(styleModalInputFocused.Width(inputWidth).Render(valInput))
 	} else {
 		content.WriteString(styleModalInput.Width(inputWidth).Render(valInput))
+	}
+	content.WriteString("\n")
+
+	// Description field
+	content.WriteString(styleModalLabel.Render("Description (optional):"))
+	content.WriteString("\n")
+	descInput := m.editDescInput.View()
+	if m.editFocus == FocusDescription {
+		content.WriteString(styleModalInputFocused.Width(inputWidth).Render(descInput))
+	} else {
+		content.WriteString(styleModalInput.Width(inputWidth).Render(descInput))
 	}
 
 	// Error

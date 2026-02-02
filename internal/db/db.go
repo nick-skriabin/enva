@@ -17,11 +17,12 @@ type DB struct {
 
 // EnvVar represents a single environment variable record.
 type EnvVar struct {
-	Path      string
-	Profile   string
-	Key       string
-	Value     string
-	UpdatedAt time.Time
+	Path        string
+	Profile     string
+	Key         string
+	Value       string
+	Description string
+	UpdatedAt   time.Time
 }
 
 // EnvScope represents a scope record.
@@ -29,6 +30,12 @@ type EnvScope struct {
 	Path      string
 	Label     sql.NullString
 	CreatedAt time.Time
+}
+
+// VarData holds value and description for batch operations.
+type VarData struct {
+	Value       string
+	Description string
 }
 
 // DefaultDBPath returns the default database path (~/.local/share/enva/enva.db).
@@ -81,14 +88,21 @@ func (db *DB) migrate() error {
 		profile TEXT NOT NULL,
 		key TEXT NOT NULL,
 		value TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (path, profile, key)
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_env_vars_path_profile ON env_vars(path, profile);
 	`
-	_, err := db.conn.Exec(schema)
-	return err
+	if _, err := db.conn.Exec(schema); err != nil {
+		return err
+	}
+
+	// Migration: add description column to existing tables
+	db.conn.Exec(`ALTER TABLE env_vars ADD COLUMN description TEXT NOT NULL DEFAULT ''`)
+
+	return nil
 }
 
 // GetVarsForPaths retrieves all variables for the given paths and profile.
@@ -98,7 +112,7 @@ func (db *DB) GetVarsForPaths(paths []string, profile string) ([]EnvVar, error) 
 	}
 
 	// Build query with placeholders
-	query := `SELECT path, profile, key, value, updated_at FROM env_vars WHERE profile = ? AND path IN (`
+	query := `SELECT path, profile, key, value, description, updated_at FROM env_vars WHERE profile = ? AND path IN (`
 	args := []interface{}{profile}
 	for i, p := range paths {
 		if i > 0 {
@@ -118,7 +132,7 @@ func (db *DB) GetVarsForPaths(paths []string, profile string) ([]EnvVar, error) 
 	var vars []EnvVar
 	for rows.Next() {
 		var v EnvVar
-		if err := rows.Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.Description, &v.UpdatedAt); err != nil {
 			return nil, err
 		}
 		vars = append(vars, v)
@@ -128,7 +142,7 @@ func (db *DB) GetVarsForPaths(paths []string, profile string) ([]EnvVar, error) 
 
 // GetVarsForPath retrieves all variables for a specific path and profile.
 func (db *DB) GetVarsForPath(path, profile string) ([]EnvVar, error) {
-	query := `SELECT path, profile, key, value, updated_at FROM env_vars
+	query := `SELECT path, profile, key, value, description, updated_at FROM env_vars
 	          WHERE path = ? AND profile = ? ORDER BY key`
 	rows, err := db.conn.Query(query, path, profile)
 	if err != nil {
@@ -139,7 +153,7 @@ func (db *DB) GetVarsForPath(path, profile string) ([]EnvVar, error) {
 	var vars []EnvVar
 	for rows.Next() {
 		var v EnvVar
-		if err := rows.Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.Description, &v.UpdatedAt); err != nil {
 			return nil, err
 		}
 		vars = append(vars, v)
@@ -148,17 +162,17 @@ func (db *DB) GetVarsForPath(path, profile string) ([]EnvVar, error) {
 }
 
 // SetVar upserts a variable at the given path/profile/key.
-func (db *DB) SetVar(path, profile, key, value string) error {
+func (db *DB) SetVar(path, profile, key, value, description string) error {
 	// Ensure scope exists
 	if err := db.ensureScope(path); err != nil {
 		return err
 	}
 
-	query := `INSERT INTO env_vars (path, profile, key, value, updated_at)
-	          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+	query := `INSERT INTO env_vars (path, profile, key, value, description, updated_at)
+	          VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	          ON CONFLICT(path, profile, key)
-	          DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
-	_, err := db.conn.Exec(query, path, profile, key, value)
+	          DO UPDATE SET value = excluded.value, description = excluded.description, updated_at = CURRENT_TIMESTAMP`
+	_, err := db.conn.Exec(query, path, profile, key, value, description)
 	return err
 }
 
@@ -178,10 +192,10 @@ func (db *DB) DeleteVarsForPath(path, profile string) error {
 
 // GetVar retrieves a specific variable.
 func (db *DB) GetVar(path, profile, key string) (*EnvVar, error) {
-	query := `SELECT path, profile, key, value, updated_at FROM env_vars
+	query := `SELECT path, profile, key, value, description, updated_at FROM env_vars
 	          WHERE path = ? AND profile = ? AND key = ?`
 	var v EnvVar
-	err := db.conn.QueryRow(query, path, profile, key).Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.UpdatedAt)
+	err := db.conn.QueryRow(query, path, profile, key).Scan(&v.Path, &v.Profile, &v.Key, &v.Value, &v.Description, &v.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -199,7 +213,7 @@ func (db *DB) ensureScope(path string) error {
 }
 
 // SetVarsBatch sets multiple variables in a transaction.
-func (db *DB) SetVarsBatch(path, profile string, vars map[string]string) error {
+func (db *DB) SetVarsBatch(path, profile string, vars map[string]VarData) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return err
@@ -212,17 +226,17 @@ func (db *DB) SetVarsBatch(path, profile string, vars map[string]string) error {
 		return err
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO env_vars (path, profile, key, value, updated_at)
-	                         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+	stmt, err := tx.Prepare(`INSERT INTO env_vars (path, profile, key, value, description, updated_at)
+	                         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	                         ON CONFLICT(path, profile, key)
-	                         DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`)
+	                         DO UPDATE SET value = excluded.value, description = excluded.description, updated_at = CURRENT_TIMESTAMP`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	for key, value := range vars {
-		if _, err := stmt.Exec(path, profile, key, value); err != nil {
+	for key, data := range vars {
+		if _, err := stmt.Exec(path, profile, key, data.Value, data.Description); err != nil {
 			return err
 		}
 	}
